@@ -1,0 +1,46 @@
+# =========================
+# Python
+# =========================
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# =========================
+# Node / React
+# =========================
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# =========================
+# Environment & Secrets
+# =========================
+.env
+keys/
+*.key
+
+# =========================
+# Database
+# =========================
+backend/database/app.db
+
+# =========================
+# ML Models (Large Files)
+# =========================
+*.pth
+*.pt
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+.vscode/
+.idea/
+
+# =========================
+# Datasets (DO NOT TRACK)
+# =========================
+ml_backend/datasets/
+
