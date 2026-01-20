@@ -2,7 +2,8 @@ import sqlite3
 import os
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-DB_PATH = "../backend/database/app.db"
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DB_PATH = os.path.join(BASE_DIR, "backend", "database", "app.db")
 
 def encrypt_and_store_stego(
     user_id,
