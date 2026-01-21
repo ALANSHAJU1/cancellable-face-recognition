@@ -13,29 +13,34 @@ const db = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
-// Create templates table
-const createTableQuery = `
-CREATE TABLE IF NOT EXISTS templates (
-    template_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    stego_image_encrypted BLOB NOT NULL,
-    encryption_iv BLOB NOT NULL,
-    encryption_tag BLOB NOT NULL,
-    feature_extractor TEXT,
-    cover_image_hash TEXT,
-    quality_psnr REAL,
-    quality_ssim REAL,
-    status TEXT DEFAULT 'ACTIVE',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-`;
+db.serialize(() => {
+  // ✅ CRITICAL: Enable WAL mode ONCE
+  db.run("PRAGMA journal_mode = WAL;");
+  db.run("PRAGMA synchronous = NORMAL;");
+  db.run("PRAGMA busy_timeout = 30000;"); // 30 seconds
 
-db.run(createTableQuery, (err) => {
-  if (err) {
-    console.error("❌ Failed to create table:", err.message);
-  } else {
-    console.log("✅ Templates table created (or already exists)");
-  }
+  // ✅ FINAL schema (MATCHES PYTHON)
+  const createTableQuery = `
+  CREATE TABLE IF NOT EXISTS templates (
+      template_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT UNIQUE NOT NULL,
+      stego_image_encrypted BLOB NOT NULL,
+      nonce BLOB NOT NULL,
+      cover_image_hash TEXT,
+      quality_psnr REAL,
+      quality_ssim REAL,
+      status TEXT DEFAULT 'ACTIVE',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  `;
+
+  db.run(createTableQuery, (err) => {
+    if (err) {
+      console.error("❌ Failed to create table:", err.message);
+    } else {
+      console.log("✅ Templates table created (or already exists)");
+    }
+  });
 });
 
 // Close DB

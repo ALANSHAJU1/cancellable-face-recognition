@@ -11,29 +11,29 @@ exports.enrollUser = (req, res) => {
   console.log("📁 req.files:", req.files);
 
   // -----------------------------
-  // SAFELY READ USERNAME (FIXED)
+  // READ + NORMALIZE USERNAME (CRITICAL FIX)
   // -----------------------------
   let username = req.body && req.body.username;
 
-  // Handle array case (multer quirk)
   if (Array.isArray(username)) {
     username = username[0];
   }
 
-  console.log("➡️ Username:", username);
-
   if (!username) {
-    console.error("❌ username missing in request body");
-    return res.status(400).json({
-      message: "Username is required"
-    });
+    console.error("❌ username missing");
+    return res.status(400).json({ message: "Username is required" });
   }
+
+  // ✅ NORMALIZATION (MUST MATCH PYTHON)
+  username = username.trim().toLowerCase();
+
+  console.log("➡️ Normalized Username:", username);
 
   // -----------------------------
   // FILE VALIDATION
   // -----------------------------
   if (!req.files || !req.files.face_image || !req.files.cover_image) {
-    console.error("❌ Face image or cover image missing");
+    console.error("❌ Face or cover image missing");
     return res.status(400).json({
       message: "face_image and cover_image are required"
     });
@@ -49,7 +49,7 @@ exports.enrollUser = (req, res) => {
   console.log("🖼️ Cover image path:", coverImagePath);
 
   // -----------------------------
-  // PYTHON SCRIPT PATH
+  // PYTHON SCRIPT PATH (ALREADY FIXED)
   // -----------------------------
   const pythonScriptPath = path.resolve(
     __dirname,
@@ -93,7 +93,7 @@ exports.enrollUser = (req, res) => {
 
     return res.json({
       message: "Enrollment successful",
-      python_output: stdoutData.trim()
+      user_id: username
     });
   });
 

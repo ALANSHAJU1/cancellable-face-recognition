@@ -1,15 +1,46 @@
 const { spawn } = require("child_process");
+const path = require("path");
 
 exports.authenticateUser = (req, res) => {
-  const { user_id } = req.body;
+  console.log("🔐 Authentication request received");
 
-  if (!user_id) {
-    return res.status(400).json({ error: "user_id is required" });
+  // Validate username
+  if (!req.body || !req.body.username) {
+    return res.status(400).json({
+      message: "username is required"
+    });
   }
 
+  // Validate face image
+  if (!req.file) {
+    return res.status(400).json({
+      message: "face_image is required"
+    });
+  }
+
+  // ✅ CRITICAL FIX: normalize username (MUST MATCH ENROLL + PYTHON)
+  const username = req.body.username.trim().toLowerCase();
+  const faceImagePath = path.resolve(req.file.path);
+
+  console.log("➡️ Username:", username);
+  console.log("🖼️ Face image path:", faceImagePath);
+
+  // Absolute path to Python script
+  const pythonScriptPath = path.join(
+    __dirname,
+    "..",
+    "..",
+    "ml_backend",
+    "inference",
+    "authenticate.py"
+  );
+
+  console.log("🐍 Python script:", pythonScriptPath);
+
   const python = spawn("python", [
-    "ml_backend/inference/authenticate.py",
-    user_id
+    pythonScriptPath,
+    username,
+    faceImagePath
   ]);
 
   let output = "";
@@ -25,6 +56,7 @@ exports.authenticateUser = (req, res) => {
 
   python.on("close", (code) => {
     if (code !== 0) {
+      console.error("❌ Python error:", errorOutput);
       return res.status(500).json({
         message: "Authentication failed",
         error: errorOutput
@@ -35,47 +67,9 @@ exports.authenticateUser = (req, res) => {
       const result = JSON.parse(output);
       return res.json(result);
     } catch {
-      return res.json({ message: output.trim() });
+      return res.json({
+        message: output.trim()
+      });
     }
   });
 };
-
-
-
-
-
-
-
-
-
-// const { spawn } = require("child_process");
-
-// exports.authenticateUser = (req, res) => {
-//   const userId = req.body.user_id;
-
-//   if (!userId) {
-//     return res.status(400).json({ error: "User ID required" });
-//   }
-
-//   const python = spawn("python", [
-//     "ml_backend/inference/authenticate.py",
-//     userId
-//   ]);
-
-//   let output = "";
-
-//   python.stdout.on("data", (data) => {
-//     output += data.toString();
-//   });
-
-//   python.stderr.on("data", (data) => {
-//     console.error("Python error:", data.toString());
-//   });
-
-//   python.on("close", () => {
-//     res.json({
-//       message: "Authentication completed",
-//       result: output
-//     });
-//   });
-// };

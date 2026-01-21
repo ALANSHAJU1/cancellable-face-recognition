@@ -11,9 +11,11 @@ export const enrollUser = async (formData) => {
   return res.data;
 };
 
-export const authenticateUser = async (userId) => {
-  const res = await axios.post(`${API_BASE}/authenticate`, {
-    user_id: userId
+export const authenticateUser = async (formData) => {
+  const res = await axios.post(`${API_BASE}/authenticate`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data"
+    }
   });
   return res.data;
 };
