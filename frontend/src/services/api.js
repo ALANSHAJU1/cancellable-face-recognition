@@ -1,21 +1,43 @@
 import axios from "axios";
 
+/*
+  Backend base URL
+  (DO NOT change – matches your working backend)
+*/
 const API_BASE = "http://localhost:5000/api";
 
+/*
+  Axios instance (clean & reusable)
+*/
+const api = axios.create({
+  baseURL: API_BASE,
+  
+});
+
+/*
+  -----------------------
+  USER ENROLLMENT
+  -----------------------
+*/
 export const enrollUser = async (formData) => {
-  const res = await axios.post(`${API_BASE}/enroll`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data"
-    }
-  });
-  return res.data;
+  try {
+    const res = await api.post("/enroll", formData);
+    return res.data;
+  } catch (error) {
+    throw error.response?.data || { message: "Enrollment failed" };
+  }
 };
 
+/*
+  -----------------------
+  USER AUTHENTICATION
+  -----------------------
+*/
 export const authenticateUser = async (formData) => {
-  const res = await axios.post(`${API_BASE}/authenticate`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data"
-    }
-  });
-  return res.data;
+  try {
+    const res = await api.post("/authenticate", formData);
+    return res.data;
+  } catch (error) {
+    throw error.response?.data || { message: "Authentication failed" };
+  }
 };

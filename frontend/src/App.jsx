@@ -1,16 +1,27 @@
-import React from "react";
-import EnrollPage from "./pages/EnrollPage";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+
 import AuthenticatePage from "./pages/AuthenticatePage";
+import Dashboard from "./pages/Dashboard";
+import EnrollPage from "./pages/EnrollPage";
+import HomePage from "./pages/HomePage";
 
 function App() {
   return (
-    <div style={{ padding: "30px", fontFamily: "Arial" }}>
-      <h1>Cancellable Face Recognition System</h1>
+    <BrowserRouter>
+      <Routes>
+        {/* Home */}
+        <Route path="/" element={<HomePage />} />
 
-      <EnrollPage />
-      <hr />
-      <AuthenticatePage />
-    </div>
+        {/* Sign Up / Enrollment */}
+        <Route path="/signup" element={<EnrollPage />} />
+
+        {/* Login / Authentication */}
+        <Route path="/login" element={<AuthenticatePage />} />
+
+        {/* Dashboard */}
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

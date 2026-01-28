@@ -1,0 +1,105 @@
+/* ---------- GLOBAL ---------- */
+body {
+  font-family: "Segoe UI", sans-serif;
+  background: linear-gradient(to right, #0b0b0b, #1a1a1a);
+  margin: 0;
+  padding: 0;
+  color: #ffffff;
+}
+
+/* ---------- CONTAINERS ---------- */
+.container {
+  max-width: 420px;
+  margin: 80px auto;
+  background: #ffffff;
+  color: #111;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+.center-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  text-align: center;
+}
+
+/* ---------- HEADINGS ---------- */
+h1, h2 {
+  text-align: center;
+  color: #ffffff;
+}
+
+.container h2 {
+  color: #111;
+}
+
+/* ---------- INPUTS ---------- */
+input {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+}
+
+/* ---------- BUTTONS ---------- */
+button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  background: #8b0000;          /* Dark Red */
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+button:hover {
+  background: #b30000;
+}
+
+button:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+/* ---------- STATUS / MESSAGES ---------- */
+.status {
+  margin-top: 12px;
+  text-align: center;
+  font-weight: bold;
+  color: #8b0000;
+}
+
+/* ---------- VIDEO (WEBCAM) ---------- */
+video {
+  width: 100%;
+  border-radius: 6px;
+  margin-top: 10px;
+  border: 2px solid #8b0000;
+}
+
+/* ---------- DASHBOARD ---------- */
+.dashboard {
+  background: #111;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0px 8px 25px rgba(0, 0, 0, 0.7);
+}
+
+.dashboard h1 {
+  margin-bottom: 30px;
+}
+
+.dashboard button {
+  max-width: 260px;
+}
+
+
