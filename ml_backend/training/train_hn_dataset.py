@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, random, time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import torch
@@ -8,148 +8,238 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import models, transforms
 from facenet_pytorch import InceptionResnetV1
 from PIL import Image
-import random
+from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from networks.hiding_network import HidingNetwork
 from utils.celeba_dataloader import CelebADataset
 
 # ======================================================
-# CONFIGURATION (SAFE FOR CPU & IEEE PROJECT)
+# SYSTEM CONFIG
 # ======================================================
+torch.set_num_threads(os.cpu_count())
+
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-BATCH_SIZE = 4        # small batch for CPU safety
-EPOCHS = 2            # demonstration epochs (increase if GPU)
+IMG_SIZE = 256
+BATCH_SIZE = 8 if DEVICE == "cuda" else 4
+EPOCHS = 100
 LR = 1e-4
+SUBSET_SIZE = 20000
 
 FACE_DATASET_PATH = "../datasets/celeba/img_align_celeba/img_align_celeba"
 COVER_DATASET_PATH = "../datasets/covers"
 
-SUBSET_SIZE = 2000    # <<< IMPORTANT: subset size for training speed
+CHECKPOINT_PATH = "../models/hn_checkpoint.pth"
+BEST_MODEL_PATH = "../models/hiding_network_dataset.pth"
+
+os.makedirs("../models", exist_ok=True)
+os.makedirs("../results", exist_ok=True)
 
 # ======================================================
-# DATASETS
+# DATASET
 # ======================================================
-print("📂 Loading CelebA dataset...")
+dataset_full = CelebADataset(FACE_DATASET_PATH)
+dataset = Subset(dataset_full, range(SUBSET_SIZE))
 
-face_dataset_full = CelebADataset(FACE_DATASET_PATH)
-face_dataset = Subset(face_dataset_full, range(SUBSET_SIZE))
+train_size = int(0.9 * len(dataset))
+val_size = len(dataset) - train_size
+train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
-face_loader = DataLoader(
-    face_dataset,
+train_loader = DataLoader(
+    train_dataset,
     batch_size=BATCH_SIZE,
-    shuffle=True
+    shuffle=True,
+    num_workers=2 if DEVICE=="cuda" else 0,
+    pin_memory=(DEVICE=="cuda")
 )
 
-print(f"✅ Using {SUBSET_SIZE} face images for training")
+val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE)
 
-# Load cover images list
-cover_images = [
+# ======================================================
+# SAFE COVER LIST
+# ======================================================
+cover_files = [
     os.path.join(COVER_DATASET_PATH, f)
     for f in os.listdir(COVER_DATASET_PATH)
-    if f.lower().endswith((".jpg", ".png"))
+    if os.path.isfile(os.path.join(COVER_DATASET_PATH, f))
+    and f.lower().endswith((".jpg",".jpeg",".png"))
 ]
 
-if len(cover_images) == 0:
-    raise ValueError("No cover images found in datasets/covers")
+if len(cover_files) == 0:
+    raise ValueError("No valid cover images found.")
 
 cover_transform = transforms.Compose([
-    transforms.Resize((256, 256)),
+    transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.ToTensor()
 ])
 
 # ======================================================
 # MODELS
 # ======================================================
-print("🧠 Loading Hiding Network...")
 hn = HidingNetwork().to(DEVICE)
 
-print("🧠 Loading VGG-19 for perceptual loss...")
-vgg = models.vgg19(pretrained=True).features[:16].eval().to(DEVICE)
+vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features[:16].eval().to(DEVICE)
 for p in vgg.parameters():
     p.requires_grad = False
 
-print("🧠 Loading FaceNet for feature loss...")
 facenet = InceptionResnetV1(pretrained="vggface2").eval().to(DEVICE)
 for p in facenet.parameters():
     p.requires_grad = False
 
-# ======================================================
-# LOSS & OPTIMIZER
-# ======================================================
-mse_loss = nn.MSELoss()
+criterion = nn.MSELoss()
 optimizer = optim.Adam(hn.parameters(), lr=LR)
 
 # ======================================================
-# TRAINING LOOP
+# RESUME SUPPORT
 # ======================================================
-print("🚀 Starting Hiding Network dataset training...\n")
-hn.train()
+start_epoch = 0
+start_batch = 0
+best_val_loss = float("inf")
 
-for epoch in range(EPOCHS):
-    epoch_loss = 0.0
+if os.path.exists(CHECKPOINT_PATH):
+    print("🔁 Resuming checkpoint...")
+    checkpoint = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
+    hn.load_state_dict(checkpoint["model_state"])
+    optimizer.load_state_dict(checkpoint["optimizer_state"])
+    start_epoch = checkpoint["epoch"]
+    start_batch = checkpoint.get("batch_idx", 0)
+    best_val_loss = checkpoint["best_loss"]
+    print(f"Resumed from epoch {start_epoch}, batch {start_batch}")
 
-    for batch_idx, (faces, _) in enumerate(face_loader):
-        faces = faces.to(DEVICE)
+# ======================================================
+# TRAIN LOOP WITH SAFE INTERRUPT SAVE
+# ======================================================
+train_losses, val_losses = [], []
 
-        # -------- Random cover batch --------
-        cover_batch = []
-        for _ in range(faces.size(0)):
-            cover_path = random.choice(cover_images)
-            cover_img = Image.open(cover_path).convert("RGB")
-            cover_img = cover_transform(cover_img)
-            cover_batch.append(cover_img)
+try:
+    for epoch in range(start_epoch, EPOCHS):
 
-        covers = torch.stack(cover_batch).to(DEVICE)
+        hn.train()
+        running_loss = 0
 
-        # -------- Forward + Backprop --------
-        optimizer.zero_grad()
+        pbar = tqdm(enumerate(train_loader),
+                    total=len(train_loader),
+                    desc=f"Epoch {epoch+1}/{EPOCHS}")
 
-        stego = hn(faces, covers)
+        for batch_idx, (faces, _) in pbar:
 
-        # 1️⃣ Reconstruction loss
-        loss_rec = mse_loss(stego, covers)
+            if epoch == start_epoch and batch_idx < start_batch:
+                continue
 
-        # 2️⃣ Perceptual loss
-        loss_perc = mse_loss(vgg(stego), vgg(covers))
+            faces = faces.to(DEVICE)
 
-        # 3️⃣ Feature loss
-        faces_160 = torch.nn.functional.interpolate(faces, size=(160, 160))
-        stego_160 = torch.nn.functional.interpolate(stego, size=(160, 160))
+            # Random cover batch
+            cover_batch = []
+            for _ in range(faces.size(0)):
+                img = Image.open(random.choice(cover_files)).convert("RGB")
+                img = cover_transform(img)
+                cover_batch.append(img)
 
-        feat_face = facenet(faces_160)
-        feat_stego = facenet(stego_160)
+            covers = torch.stack(cover_batch).to(DEVICE)
 
-        loss_feat = mse_loss(feat_face, feat_stego)
+            optimizer.zero_grad()
 
-        # Total loss
-        total_loss = loss_rec + 0.1 * loss_perc + loss_feat
+            stego = hn(faces, covers)
 
-        total_loss.backward()
-        optimizer.step()
+            loss_rec = criterion(stego, covers)
+            loss_perc = criterion(vgg(stego), vgg(covers))
 
-        epoch_loss += total_loss.item()
+            faces_160 = torch.nn.functional.interpolate(faces, size=(160,160))
+            stego_160 = torch.nn.functional.interpolate(stego, size=(160,160))
 
-        # -------- Progress logging --------
-        if batch_idx % 20 == 0:
-            print(
-                f"Epoch {epoch+1}/{EPOCHS} | "
-                f"Batch {batch_idx}/{len(face_loader)} | "
-                f"Loss: {total_loss.item():.4f}"
+            loss_feat = criterion(
+                facenet(faces_160),
+                facenet(stego_160)
             )
 
-    avg_loss = epoch_loss / len(face_loader)
-    print(f"\n✅ Epoch [{epoch+1}/{EPOCHS}] completed — Avg Loss: {avg_loss:.4f}\n")
+            total_loss = loss_rec + 0.1*loss_perc + loss_feat
+
+            total_loss.backward()
+            optimizer.step()
+
+            running_loss += total_loss.item()
+            pbar.set_postfix(loss=total_loss.item())
+
+            # Mid-epoch checkpoint every 200 batches
+            if batch_idx % 200 == 0:
+                torch.save({
+                    "epoch": epoch,
+                    "batch_idx": batch_idx,
+                    "model_state": hn.state_dict(),
+                    "optimizer_state": optimizer.state_dict(),
+                    "best_loss": best_val_loss
+                }, CHECKPOINT_PATH)
+
+        avg_train_loss = running_loss / len(train_loader)
+        train_losses.append(avg_train_loss)
+
+        # ================= VALIDATION =================
+        hn.eval()
+        val_loss = 0
+
+        with torch.no_grad():
+            for faces, _ in val_loader:
+                faces = faces.to(DEVICE)
+                dummy_cover = torch.zeros_like(faces)
+                stego = hn(faces, dummy_cover)
+                val_loss += criterion(stego, dummy_cover).item()
+
+        avg_val_loss = val_loss / len(val_loader)
+        val_losses.append(avg_val_loss)
+
+        print(f"Epoch {epoch+1} | Train {avg_train_loss:.4f} | Val {avg_val_loss:.4f}")
+
+        # Save best model
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            torch.save(hn.state_dict(), BEST_MODEL_PATH)
+            print("💾 Saved best model")
+
+        # End-epoch checkpoint
+        torch.save({
+            "epoch": epoch+1,
+            "batch_idx": 0,
+            "model_state": hn.state_dict(),
+            "optimizer_state": optimizer.state_dict(),
+            "best_loss": best_val_loss
+        }, CHECKPOINT_PATH)
+
+except KeyboardInterrupt:
+    print("\n⚠ Training interrupted! Saving checkpoint safely...")
+    torch.save({
+        "epoch": epoch,
+        "batch_idx": batch_idx,
+        "model_state": hn.state_dict(),
+        "optimizer_state": optimizer.state_dict(),
+        "best_loss": best_val_loss
+    }, CHECKPOINT_PATH)
+    print("✅ Safe checkpoint saved.")
+    exit()
 
 # ======================================================
-# SAVE TRAINED MODEL
+# SAVE LOSS GRAPH
 # ======================================================
-os.makedirs("../models", exist_ok=True)
-torch.save(hn.state_dict(), "../models/hiding_network_dataset.pth")
+plt.figure()
+plt.plot(train_losses, label="Train")
+plt.plot(val_losses, label="Val")
+plt.legend()
+plt.savefig("../results/hn_loss_graph.png")
+plt.close()
 
-print("💾 Dataset-trained Hiding Network saved at:")
-print("   ../models/hiding_network_dataset.pth")
-print("\n🎉 HN dataset training finished successfully")
+print("....................................... HN Training Complete...............................")
+
+
+
+
+
+
+
+
+
+
+
+
 
 # import sys, os
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
