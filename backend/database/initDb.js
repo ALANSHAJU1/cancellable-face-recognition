@@ -1,20 +1,20 @@
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 
-// Path to SQLite DB
+// Define SQLite DB  Path 
 const dbPath = path.join(__dirname, "app.db");
 
 // Connect (creates DB if it doesn't exist)
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error("❌ Failed to connect to SQLite:", err.message);
+    console.error(" Failed to connect to SQLite:", err.message);
   } else {
-    console.log("✅ Connected to SQLite database");
+    console.log(" Connected to SQLite database");
   }
 });
 
 db.serialize(() => {
-  // ✅ CRITICAL: Enable WAL mode ONCE
+  // CRITICAL: Enable WAL mode ONCE
   db.run("PRAGMA journal_mode = WAL;");
   db.run("PRAGMA synchronous = NORMAL;");
   db.run("PRAGMA busy_timeout = 30000;"); // 30 seconds
@@ -36,9 +36,9 @@ db.serialize(() => {
 
   db.run(createTableQuery, (err) => {
     if (err) {
-      console.error("❌ Failed to create table:", err.message);
+      console.error("Failed to create table:", err.message);
     } else {
-      console.log("✅ Templates table created (or already exists)");
+      console.log("Templates table created (or already exists)");
     }
   });
 });
@@ -46,8 +46,8 @@ db.serialize(() => {
 // Close DB
 db.close((err) => {
   if (err) {
-    console.error("❌ Failed to close DB:", err.message);
+    console.error(" Failed to close DB:", err.message);
   } else {
-    console.log("✅ SQLite DB initialization complete");
+    console.log(" SQLite DB initialization complete");
   }
 });

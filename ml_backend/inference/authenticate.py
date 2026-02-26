@@ -177,8 +177,6 @@ sys.stdout.flush()
 
 
 
-
-
 # import sys, os, json, torch, numpy as np, cv2
 # from mtcnn import MTCNN
 # from facenet_pytorch import InceptionResnetV1

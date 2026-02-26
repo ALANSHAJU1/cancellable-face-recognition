@@ -1,6 +1,8 @@
+// frontend/src/pages/EnrollPage.jsx
+
 import { useRef, useState } from "react";
 import { enrollUser } from "../services/api";
-import "./EnrollPage.css"; // ✅ NEW
+import "./EnrollPage.css";
 
 function EnrollPage() {
   const videoRef = useRef(null);
@@ -13,6 +15,7 @@ function EnrollPage() {
   const [coverImage, setCoverImage] = useState(null);
   const [status, setStatus] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
+  const [loading, setLoading] = useState(false); // ✅ Added loading state
 
   // -----------------------------
   // Start camera
@@ -82,6 +85,7 @@ function EnrollPage() {
       return;
     }
 
+    setLoading(true);
     setStatus("Enrolling user...");
 
     try {
@@ -91,9 +95,21 @@ function EnrollPage() {
       formData.append("cover_image", coverImage);
 
       const result = await enrollUser(formData);
-      setStatus(result.message || "You have been successfully registered.");
-    } catch {
-      setStatus("Enrollment failed. Please retry.");
+
+      setStatus(result.message || "Enrollment successful.");
+      setUsername("");
+      setFaceImage(null);
+      setCoverImage(null);
+      setFacePreview(null);
+    } catch (error) {
+      // ✅ Show backend message properly
+      const message =
+        error?.response?.data?.message ||
+        "Enrollment failed. Please retry.";
+
+      setStatus(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -150,9 +166,9 @@ function EnrollPage() {
         <button
           className="primary"
           onClick={handleEnroll}
-          disabled={!username || !faceImage || !coverImage}
+          disabled={!username || !faceImage || !coverImage || loading}
         >
-          Sign Up
+          {loading ? "Processing..." : "Sign Up"}
         </button>
 
         <p className="status">{status}</p>
